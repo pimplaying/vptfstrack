@@ -16,7 +16,8 @@ from PyQt6.QtGui import QFont, QIcon
 
 from updater import check_for_update, CURRENT_VERSION, apply_pending_update_and_maybe_restart
 from backend_worker import TrackerWorker
-from calibration_dialog import CalibrationDialog
+from calibration_dialog import CalibrationDialog  # legacy, no longer used by the button below
+from reference_map_dialog import ReferenceMapDialog
 
 APP_TITLE = f"PTFS Tracker v{CURRENT_VERSION}"
 
@@ -73,8 +74,8 @@ class MainWindow(QMainWindow):
 
         bar.addSpacing(12)
 
-        self.calibrate_btn = QPushButton("Calibrate")
-        self.calibrate_btn.clicked.connect(self.open_calibration)
+        self.calibrate_btn = QPushButton("Set Reference Map")
+        self.calibrate_btn.clicked.connect(self.open_reference_map_setup)
         bar.addWidget(self.calibrate_btn)
 
         bar.addSpacing(12)
@@ -209,12 +210,12 @@ class MainWindow(QMainWindow):
         self._do_disconnect()
         self._refresh_style()
 
-    def open_calibration(self):
-        dialog = CalibrationDialog(self)
+    def open_reference_map_setup(self):
+        dialog = ReferenceMapDialog(self)
         if dialog.exec():
-            self._log("Calibration saved.")
+            self._log("Reference map saved.")
         else:
-            self._log("Calibration cancelled.")
+            self._log("Reference map setup cancelled.")
 
     def _refresh_style(self):
         for widget in (self.connect_btn, self.status_label):
