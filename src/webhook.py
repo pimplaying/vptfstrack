@@ -5,13 +5,16 @@ Posts position updates to a Discord webhook as a formatted embed.
 import time
 import requests
 
-import config
+import app_config as config
 
 _last_post_time = 0.0
 
 
 def post_session_event(callsign, aircraft_type, signed_in):
     action = "signed on" if signed_in else "signed off"
+    if not config.DISCORD_WEBHOOK_URL:
+        return "Discord webhook is not configured; edit the user's settings.json."
+
     payload = {
         "embeds": [
             {
@@ -48,6 +51,9 @@ def post_position(game_x, game_y, callsign=None, aircraft_type=None):
     leaves aircraft type blank if none was given.
     """
     global _last_post_time
+    if not config.DISCORD_WEBHOOK_URL:
+        return None
+
     now = time.time()
     if now - _last_post_time < config.DISCORD_POST_MIN_INTERVAL_SECONDS:
         return None

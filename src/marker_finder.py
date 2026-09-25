@@ -15,7 +15,7 @@ color matching isn't working well for you.
 import cv2
 import numpy as np
 
-import config
+import app_config as config
 
 
 def find_marker_pixel(frame_bgr):

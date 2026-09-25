@@ -16,6 +16,12 @@ python main.py
 You should see the vPilot-style window. The Connect button just toggles
 state and logs messages for now — backend wiring comes next.
 
+Packaged installs create a per-user settings file at
+`%APPDATA%\PTFS Tracker\settings.json`. Each user must add their own Discord
+webhook URL and configure their minimap region there. The reference map is
+saved in the same per-user folder. Do not distribute this settings file; it
+contains the user's webhook credential.
+
 ## 2. Configure self-update
 
 In `gui/updater.py`, set:

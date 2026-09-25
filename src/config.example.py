@@ -26,7 +26,7 @@ MARKER_MIN_PIXEL_AREA = 4            # ignore tiny noise blobs smaller than this
 POLL_INTERVAL_SECONDS = 1.0   # how often to capture + process a frame
 
 # --- Discord ---
-DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/XXXX/XXXX"
+DISCORD_WEBHOOK_URL = ""
 DISCORD_POST_MIN_INTERVAL_SECONDS = 5  # avoid spamming the webhook every tick
 
 # --- Local broadcast server (for the web map) ---

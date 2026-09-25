@@ -5,13 +5,19 @@ block_cipher = None
 
 a = Analysis(
     ['main.py'],
-    pathex=[],
+    pathex=['../src'],
     binaries=[],
     datas=[('style.qss', '.'), ('version.txt', '.'), ('icon.ico', '.')],
-    hiddenimports=[],
+    hiddenimports=[
+        'app_config',
+        'webhook',
+        'broadcast_server',
+        'marker_finder',
+        'map_locator',
+    ],
     hookspath=[],
     runtime_hooks=[],
-    excludes=[],
+    excludes=['config'],
     cipher=block_cipher,
 )
 

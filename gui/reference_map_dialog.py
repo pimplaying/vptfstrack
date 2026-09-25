@@ -23,7 +23,9 @@ SRC_DIR = os.path.join(
 if SRC_DIR not in sys.path:
     sys.path.insert(0, SRC_DIR)
 
-REFERENCE_MAP_PATH = os.path.join(SRC_DIR, "reference_map.png")
+import app_config  # noqa: E402
+
+REFERENCE_MAP_PATH = str(app_config.REFERENCE_MAP_PATH)
 
 MAX_DISPLAY_WIDTH = 1100
 MAX_DISPLAY_HEIGHT = 700
@@ -150,6 +152,7 @@ class ReferenceMapDialog(QDialog):
             return
         x1, y1, x2, y2 = self.selection_native
         crop = self.native_image[y1:y2, x1:x2]
+        os.makedirs(os.path.dirname(REFERENCE_MAP_PATH), exist_ok=True)
         cv2.imwrite(REFERENCE_MAP_PATH, crop)
         QMessageBox.information(
             self, "Reference map saved",

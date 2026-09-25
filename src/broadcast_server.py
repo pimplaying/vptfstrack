@@ -9,7 +9,7 @@ import json
 
 import websockets
 
-import config
+import app_config as config
 
 _connected_clients = set()
 _loop = None

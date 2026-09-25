@@ -16,7 +16,6 @@ from PyQt6.QtGui import QFont, QIcon
 
 from updater import check_for_update, CURRENT_VERSION, apply_pending_update_and_maybe_restart
 from backend_worker import TrackerWorker, WebhookEventWorker
-from calibration_dialog import CalibrationDialog  # legacy, no longer used by the button below
 from reference_map_dialog import ReferenceMapDialog
 
 APP_TITLE = f"PTFS Tracker v{CURRENT_VERSION}"
@@ -44,6 +43,12 @@ class MainWindow(QMainWindow):
 
         self._build_ui()
         self._log(f"PTFS Tracker version {CURRENT_VERSION}")
+        from backend_worker import config
+        if not config.DISCORD_WEBHOOK_URL:
+            self._log(
+                "Discord is not configured. Add your webhook URL to "
+                f"{config.SETTINGS_PATH} and restart the app."
+            )
 
         self._check_updates_on_startup()
 

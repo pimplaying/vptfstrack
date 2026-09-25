@@ -20,13 +20,13 @@ SRC_DIR = os.path.join(
 if SRC_DIR not in sys.path:
     sys.path.insert(0, SRC_DIR)
 
-import config          # noqa: E402
+import app_config as config  # noqa: E402
 import webhook         # noqa: E402
 import broadcast_server  # noqa: E402
 from marker_finder import find_marker_pixel  # noqa: E402
 from map_locator import MapLocator  # noqa: E402
 
-REFERENCE_MAP_PATH = os.path.join(SRC_DIR, "reference_map.png")
+REFERENCE_MAP_PATH = str(config.REFERENCE_MAP_PATH)
 
 # Matches below this confidence are treated as "no reliable fix" and skipped
 # rather than sent out - avoids spamming garbage positions on a bad frame.
