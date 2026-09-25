@@ -4,7 +4,6 @@
 
 vPTFS Track is a dedicated flight tracking application made for **ATC365**. It provides a simple desktop interface for tracking aircraft and viewing nearby ATC positions.
 
-![vPTFS Track](564886ef-e354-4a74-b9a5-a744e726a004.png)
 
 ## ✈️ Features
 
