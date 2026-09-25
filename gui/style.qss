@@ -93,6 +93,22 @@ QTextEdit#messageLog {
     font-family: Consolas, monospace;
 }
 
+/* Callsign / aircraft type inputs */
+QLineEdit {
+    background-color: #0d1014;
+    border: 1px solid #2c353f;
+    border-radius: 3px;
+    padding: 4px 6px;
+    color: #d7dde3;
+}
+QLineEdit:focus {
+    border: 1px solid #4fb0e3;
+}
+QLineEdit:disabled {
+    color: #5a636c;
+    background-color: #14181d;
+}
+
 /* Frequency-style readouts */
 #freqLabel {
     color: #4fd6d6;

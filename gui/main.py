@@ -9,19 +9,17 @@ from datetime import datetime
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QListWidget, QListWidgetItem, QTabWidget,
-    QTextEdit, QFrame, QSizePolicy,
+    QTextEdit, QFrame, QSizePolicy, QLineEdit,
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont, QIcon
 
 from updater import check_for_update, CURRENT_VERSION, apply_pending_update_and_maybe_restart
 from backend_worker import TrackerWorker
+from calibration_dialog import CalibrationDialog
 
 APP_TITLE = f"PTFS Tracker v{CURRENT_VERSION}"
 
-# Static list of controller/positions shown in the left panel.
-# Swap this later for a live "connected viewers" feed from the backend if
-# you'd rather show who's watching than a fixed position list.
 DEFAULT_POSITIONS = [
     "Center",
     "Approach/Departure",
@@ -38,21 +36,13 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle(APP_TITLE)
-        self.resize(820, 420)
+        self.resize(880, 420)
         self.connected = False
+        self.worker = None
 
         self._build_ui()
         self._log(f"PTFS Tracker version {CURRENT_VERSION}")
-        self.worker = None
 
-        # Try to show the configured callsign right away if backend config exists.
-        try:
-            from backend_worker import config as backend_config
-            self.callsign_label.setText(f"Callsign: {backend_config.CALLSIGN}")
-        except Exception:
-            pass
-
-        # Check for updates shortly after launch, non-blocking to the UI feel.
         self._check_updates_on_startup()
 
     # ---------- UI construction ----------
@@ -81,7 +71,27 @@ class MainWindow(QMainWindow):
         self.disconnect_btn.clicked.connect(self.force_disconnect)
         bar.addWidget(self.disconnect_btn)
 
-        bar.addSpacing(16)
+        bar.addSpacing(12)
+
+        self.calibrate_btn = QPushButton("Calibrate")
+        self.calibrate_btn.clicked.connect(self.open_calibration)
+        bar.addWidget(self.calibrate_btn)
+
+        bar.addSpacing(12)
+
+        self.callsign_input = QLineEdit()
+        self.callsign_input.setPlaceholderText("Callsign")
+        self.callsign_input.setFixedWidth(110)
+        self.callsign_input.setMaxLength(12)
+        bar.addWidget(self.callsign_input)
+
+        self.aircraft_input = QLineEdit()
+        self.aircraft_input.setPlaceholderText("Aircraft ICAO (e.g. B738)")
+        self.aircraft_input.setFixedWidth(150)
+        self.aircraft_input.setMaxLength(10)
+        bar.addWidget(self.aircraft_input)
+
+        bar.addSpacing(12)
 
         self.status_label = QLabel("Not connected")
         self.status_label.setObjectName("statusLabel")
@@ -89,11 +99,6 @@ class MainWindow(QMainWindow):
         bar.addWidget(self.status_label)
 
         bar.addStretch(1)
-
-        self.callsign_label = QLabel("Callsign: —")
-        bar.addWidget(self.callsign_label)
-
-        bar.addSpacing(16)
 
         freq_label = QLabel("POSITION:")
         bar.addWidget(freq_label)
@@ -106,7 +111,6 @@ class MainWindow(QMainWindow):
     def _build_body(self):
         body = QHBoxLayout()
 
-        # Left panel: positions list
         left = QVBoxLayout()
         left_title = QLabel("Controllers In Range:")
         left.addWidget(left_title)
@@ -123,7 +127,6 @@ class MainWindow(QMainWindow):
         left_container.setFixedWidth(220)
         body.addWidget(left_container)
 
-        # Right panel: tabbed Messages / Notes
         self.tabs = QTabWidget()
 
         self.message_log = QTextEdit()
@@ -146,14 +149,25 @@ class MainWindow(QMainWindow):
         self.message_log.append(f"[{timestamp}] {text}")
 
     def connect_toggled(self, checked: bool):
-        self.connected = checked
         if checked:
+            callsign = self.callsign_input.text().strip().upper()
+            aircraft_type = self.aircraft_input.text().strip().upper()
+
+            if not callsign or not aircraft_type:
+                self._log("Enter a callsign AND an aircraft type before connecting.")
+                self.connect_btn.setChecked(False)
+                return
+
+            self.connected = True
             self.connect_btn.setText("Disconnect")
             self.connect_btn.setProperty("connected", "true")
             self.status_label.setText("Connected")
             self.status_label.setProperty("state", "connected")
+            self.callsign_input.setEnabled(False)
+            self.aircraft_input.setEnabled(False)
+            self.calibrate_btn.setEnabled(False)
 
-            self.worker = TrackerWorker()
+            self.worker = TrackerWorker(callsign, aircraft_type)
             self.worker.log.connect(self._log)
             self.worker.position.connect(self._on_position_update)
             self.worker.error.connect(self._on_worker_error)
@@ -174,10 +188,13 @@ class MainWindow(QMainWindow):
         self.connect_btn.setProperty("connected", "false")
         self.status_label.setText("Not connected")
         self.status_label.setProperty("state", "idle")
+        self.callsign_input.setEnabled(True)
+        self.aircraft_input.setEnabled(True)
+        self.calibrate_btn.setEnabled(True)
 
         if self.worker is not None:
             self.worker.stop()
-            self.worker.wait(3000)  # wait up to 3s for the thread to exit cleanly
+            self.worker.wait(3000)
             self.worker = None
 
         self._log("Disconnected.")
@@ -188,5 +205,83 @@ class MainWindow(QMainWindow):
 
     def _on_worker_error(self, message: str):
         self._log(f"ERROR: {message}")
-        # Roll the UI back to disconnected state since the worker bailed out.
         self.connect_btn.setChecked(False)
+        self._do_disconnect()
+        self._refresh_style()
+
+    def open_calibration(self):
+        dialog = CalibrationDialog(self)
+        if dialog.exec():
+            self._log("Calibration saved.")
+        else:
+            self._log("Calibration cancelled.")
+
+    def _refresh_style(self):
+        for widget in (self.connect_btn, self.status_label):
+            widget.style().unpolish(widget)
+            widget.style().polish(widget)
+
+    def _check_updates_on_startup(self):
+        try:
+            info = check_for_update()
+        except Exception as e:
+            self._log(f"Update check failed: {e}")
+            return
+
+        if info is None:
+            self._log("You're on the latest version.")
+            return
+
+        self._log(f"Update available: v{info['version']} "
+                   f"(you have v{CURRENT_VERSION}). Downloading...")
+        try:
+            from updater import apply_update
+            apply_update(info)
+            self._log("Update downloaded. Restart the app to apply it.")
+        except Exception as e:
+            self._log(f"Update download failed: {e}")
+
+    def closeEvent(self, event):
+        if self.worker is not None:
+            self.worker.stop()
+            self.worker.wait(3000)
+        event.accept()
+
+
+def resource_path(filename: str) -> str:
+    base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base, filename)
+
+
+def main():
+    apply_pending_update_and_maybe_restart()
+
+    if sys.platform == "win32":
+        import ctypes
+        try:
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+                "ptfstracker.app.1"
+            )
+        except Exception:
+            pass
+
+    app = QApplication(sys.argv)
+
+    icon_path = resource_path("icon.ico")
+    if os.path.exists(icon_path):
+        app.setWindowIcon(QIcon(icon_path))
+
+    style_path = resource_path("style.qss")
+    if os.path.exists(style_path):
+        with open(style_path) as f:
+            app.setStyleSheet(f.read())
+
+    window = MainWindow()
+    if os.path.exists(icon_path):
+        window.setWindowIcon(QIcon(icon_path))
+    window.show()
+    sys.exit(app.exec())
+
+
+if __name__ == "__main__":
+    main()

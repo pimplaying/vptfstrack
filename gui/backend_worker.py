@@ -10,14 +10,14 @@ import time
 
 from PyQt6.QtCore import QThread, pyqtSignal
 
-# Make src/ importable — it lives one level up from gui/, alongside it.
+# Make src/ importable - it lives one level up from gui/, alongside it.
 SRC_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"
 )
 if SRC_DIR not in sys.path:
     sys.path.insert(0, SRC_DIR)
 
-import config          # noqa: E402  (src/config.py — must exist, see README)
+import config          # noqa: E402  (src/config.py - must exist, see README)
 import webhook         # noqa: E402
 import broadcast_server  # noqa: E402
 from geometry import CoordinateTransform   # noqa: E402
@@ -31,9 +31,11 @@ class TrackerWorker(QThread):
     position = pyqtSignal(float, float)
     error = pyqtSignal(str)
 
-    def __init__(self):
+    def __init__(self, callsign: str, aircraft_type: str):
         super().__init__()
         self._running = False
+        self.callsign = callsign
+        self.aircraft_type = aircraft_type
 
     def run(self):
         import mss
@@ -49,7 +51,9 @@ class TrackerWorker(QThread):
             return
 
         self._running = True
-        self.log.emit("Tracker started.")
+        self.log.emit(
+            f"Tracker started for {self.callsign} ({self.aircraft_type})."
+        )
 
         with mss.mss() as sct:
             while self._running:
@@ -64,9 +68,14 @@ class TrackerWorker(QThread):
                     gx, gy = transform.pixel_to_game(px, py)
                     self.position.emit(gx, gy)
 
-                    webhook.post_position(gx, gy)
+                    webhook.post_position(
+                        gx, gy,
+                        callsign=self.callsign,
+                        aircraft_type=self.aircraft_type,
+                    )
                     broadcast_server.broadcast({
-                        "callsign": config.CALLSIGN,
+                        "callsign": self.callsign,
+                        "aircraft_type": self.aircraft_type,
                         "x": gx,
                         "y": gy,
                         "timestamp": time.time(),
