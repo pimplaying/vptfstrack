@@ -2,8 +2,13 @@
 
 ## 1. Run it in dev mode first (no building needed)
 
+Use Python 3.12 for the pinned dependencies. From the repository root in
+PowerShell:
+
 ```
-pip install -r requirements-gui.txt
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r gui/requirements-gui.txt
 cd gui
 python main.py
 ```

@@ -37,6 +37,8 @@ class TrackerWorker(QThread):
     log = pyqtSignal(str)
     position = pyqtSignal(float, float)
     error = pyqtSignal(str)
+    session_started = pyqtSignal(str, str)
+    session_stopped = pyqtSignal(str, str)
 
     def __init__(self, callsign: str, aircraft_type: str):
         super().__init__()
@@ -61,48 +63,74 @@ class TrackerWorker(QThread):
             self.error.emit(f"Failed to load reference map: {e}")
             return
 
-        self._running = True
-        self.log.emit(
-            f"Tracker started for {self.callsign} ({self.aircraft_type})."
-        )
+        session_started = False
+        try:
+            with mss.mss() as sct:
+                self._running = True
+                session_started = True
+                self.log.emit(
+                    f"Tracker started for {self.callsign} ({self.aircraft_type})."
+                )
+                self.session_started.emit(self.callsign, self.aircraft_type)
+                while self._running:
+                    shot = sct.grab(config.MINIMAP_REGION)
+                    frame = cv2.cvtColor(np.array(shot), cv2.COLOR_BGRA2BGR)
+                    marker_px = find_marker_pixel(frame)
 
-        with mss.mss() as sct:
-            while self._running:
-                shot = sct.grab(config.MINIMAP_REGION)
-                frame = cv2.cvtColor(np.array(shot), cv2.COLOR_BGRA2BGR)
-                marker_px = find_marker_pixel(frame)
-
-                if marker_px is None:
-                    self.log.emit("Marker not found this frame.")
-                else:
-                    result = locator.locate_marker(frame, marker_px)
-                    if result is None:
-                        self.log.emit("Could not match minimap to reference map.")
+                    if marker_px is None:
+                        self.log.emit("Marker not found this frame.")
                     else:
-                        abs_x, abs_y, confidence = result
-                        if confidence < MIN_CONFIDENCE:
-                            self.log.emit(
-                                f"Low-confidence match ({confidence:.2f}), skipping."
-                            )
+                        result = locator.locate_marker(frame, marker_px)
+                        if result is None:
+                            self.log.emit("Could not match minimap to reference map.")
                         else:
-                            self.position.emit(abs_x, abs_y)
-                            webhook.post_position(
-                                abs_x, abs_y,
-                                callsign=self.callsign,
-                                aircraft_type=self.aircraft_type,
-                            )
-                            broadcast_server.broadcast({
-                                "callsign": self.callsign,
-                                "aircraft_type": self.aircraft_type,
-                                "x": abs_x,
-                                "y": abs_y,
-                                "confidence": confidence,
-                                "timestamp": time.time(),
-                            })
+                            abs_x, abs_y, confidence = result
+                            if confidence < MIN_CONFIDENCE:
+                                self.log.emit(
+                                    f"Low-confidence match ({confidence:.2f}), skipping."
+                                )
+                            else:
+                                self.position.emit(abs_x, abs_y)
+                                webhook_result = webhook.post_position(
+                                    abs_x, abs_y,
+                                    callsign=self.callsign,
+                                    aircraft_type=self.aircraft_type,
+                                )
+                                if webhook_result:
+                                    self.log.emit(webhook_result)
+                                broadcast_server.broadcast({
+                                    "callsign": self.callsign,
+                                    "aircraft_type": self.aircraft_type,
+                                    "x": abs_x,
+                                    "y": abs_y,
+                                    "confidence": confidence,
+                                    "timestamp": time.time(),
+                                })
 
-                time.sleep(config.POLL_INTERVAL_SECONDS)
+                    time.sleep(config.POLL_INTERVAL_SECONDS)
+        except Exception as e:
+            self.error.emit(f"Tracker failed: {e}")
+        finally:
+            self._running = False
+            if session_started:
+                self.session_stopped.emit(self.callsign, self.aircraft_type)
 
         self.log.emit("Tracker stopped.")
 
     def stop(self):
         self._running = False
+
+
+class WebhookEventWorker(QThread):
+    result = pyqtSignal(str)
+
+    def __init__(self, callsign: str, aircraft_type: str, signed_in: bool):
+        super().__init__()
+        self.callsign = callsign
+        self.aircraft_type = aircraft_type
+        self.signed_in = signed_in
+
+    def run(self):
+        self.result.emit(webhook.post_session_event(
+            self.callsign, self.aircraft_type, self.signed_in
+        ))

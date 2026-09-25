@@ -10,6 +10,34 @@ import config
 _last_post_time = 0.0
 
 
+def post_session_event(callsign, aircraft_type, signed_in):
+    action = "signed on" if signed_in else "signed off"
+    payload = {
+        "embeds": [
+            {
+                "title": f"{callsign} {action}",
+                "fields": [
+                    {"name": "Callsign", "value": callsign, "inline": True},
+                    {"name": "Aircraft", "value": aircraft_type, "inline": True},
+                ],
+                "color": 0x2ECC71 if signed_in else 0xE74C3C,
+            }
+        ]
+    }
+
+    try:
+        resp = requests.post(config.DISCORD_WEBHOOK_URL, json=payload, timeout=5)
+        if resp.status_code >= 300:
+            detail = resp.text.strip()
+            if detail:
+                detail = f" {detail[:300]}"
+            return f"Discord returned HTTP {resp.status_code} for {action}.{detail}"
+    except (requests.RequestException, ValueError) as e:
+        return f"Failed to post {action} message to Discord: {e}"
+
+    return f"Discord {action} message sent (HTTP {resp.status_code})."
+
+
 def post_position(game_x, game_y, callsign=None, aircraft_type=None):
     """
     Posts to Discord, throttled to DISCORD_POST_MIN_INTERVAL_SECONDS so
@@ -22,7 +50,7 @@ def post_position(game_x, game_y, callsign=None, aircraft_type=None):
     global _last_post_time
     now = time.time()
     if now - _last_post_time < config.DISCORD_POST_MIN_INTERVAL_SECONDS:
-        return
+        return None
 
     callsign = callsign or getattr(config, "CALLSIGN", "UNKNOWN")
     aircraft_type = aircraft_type or "-"
@@ -41,11 +69,12 @@ def post_position(game_x, game_y, callsign=None, aircraft_type=None):
         ]
     }
 
+    _last_post_time = now
     try:
         resp = requests.post(config.DISCORD_WEBHOOK_URL, json=payload, timeout=5)
         if resp.status_code >= 300:
-            print(f"[webhook] Discord returned {resp.status_code}: {resp.text}")
+            return f"Discord returned HTTP {resp.status_code}."
     except requests.RequestException as e:
-        print(f"[webhook] Failed to post to Discord: {e}")
+        return f"Failed to post to Discord: {e}"
 
-    _last_post_time = now
+    return "Position sent to Discord."

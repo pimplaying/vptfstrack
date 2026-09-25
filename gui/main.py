@@ -15,7 +15,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont, QIcon
 
 from updater import check_for_update, CURRENT_VERSION, apply_pending_update_and_maybe_restart
-from backend_worker import TrackerWorker
+from backend_worker import TrackerWorker, WebhookEventWorker
 from calibration_dialog import CalibrationDialog  # legacy, no longer used by the button below
 from reference_map_dialog import ReferenceMapDialog
 
@@ -40,6 +40,7 @@ class MainWindow(QMainWindow):
         self.resize(880, 420)
         self.connected = False
         self.worker = None
+        self.webhook_event_workers = []
 
         self._build_ui()
         self._log(f"PTFS Tracker version {CURRENT_VERSION}")
@@ -172,6 +173,16 @@ class MainWindow(QMainWindow):
             self.worker.log.connect(self._log)
             self.worker.position.connect(self._on_position_update)
             self.worker.error.connect(self._on_worker_error)
+            self.worker.session_started.connect(
+                lambda cs, aircraft: self._send_session_event(
+                    cs, aircraft, True
+                )
+            )
+            self.worker.session_stopped.connect(
+                lambda cs, aircraft: self._send_session_event(
+                    cs, aircraft, False
+                )
+            )
             self.worker.start()
         else:
             self._do_disconnect()
@@ -203,6 +214,17 @@ class MainWindow(QMainWindow):
     def _on_position_update(self, gx: float, gy: float):
         self.freq_value.setText(f"{gx:.0f}, {gy:.0f}")
         self._log(f"Position: ({gx:.1f}, {gy:.1f})")
+
+    def _send_session_event(self, callsign: str, aircraft_type: str,
+                            signed_in: bool):
+        worker = WebhookEventWorker(callsign, aircraft_type, signed_in)
+        self.webhook_event_workers.append(worker)
+        worker.result.connect(self._log)
+        worker.finished.connect(
+            lambda current=worker: self.webhook_event_workers.remove(current)
+            if current in self.webhook_event_workers else None
+        )
+        worker.start()
 
     def _on_worker_error(self, message: str):
         self._log(f"ERROR: {message}")

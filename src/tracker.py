@@ -53,7 +53,9 @@ def main():
                 print(f"[tracker] pixel=({px:.1f},{py:.1f}) -> "
                       f"game=({gx:.1f},{gy:.1f})")
 
-                webhook.post_position(gx, gy)
+                webhook_result = webhook.post_position(gx, gy)
+                if webhook_result:
+                    print(f"[webhook] {webhook_result}")
                 broadcast_server.broadcast({
                     "callsign": config.CALLSIGN,
                     "x": gx,
