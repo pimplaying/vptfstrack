@@ -7,7 +7,7 @@ a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
-    datas=[('style.qss', '.'), ('version.txt', '.')],
+    datas=[('style.qss', '.'), ('version.txt', '.'), ('icon.ico', '.')],
     hiddenimports=[],
     hookspath=[],
     runtime_hooks=[],
@@ -32,5 +32,5 @@ exe = EXE(
     upx_exclude=[],
     runtime_tmpdir=None,
     console=False,   # no terminal window behind the GUI
-    icon=None,       # put an .ico path here once you have one, e.g. 'icon.ico'
+    icon='icon.ico',       # put an .ico path here once you have one, e.g. 'icon.ico'
 )

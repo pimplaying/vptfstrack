@@ -1,10 +1,5 @@
 """
 Main GUI shell for the PTFS tracker, styled after vPilot's layout.
-
-This is the frontend only for now — the "Connect" button currently just
-toggles UI state and logs a placeholder message. Once the backend
-(calibration + tracker loop) is wired in, connect_toggled() is where
-that gets started/stopped.
 """
 
 import sys
@@ -17,9 +12,10 @@ from PyQt6.QtWidgets import (
     QTextEdit, QFrame, QSizePolicy,
 )
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QFont, QIcon
 
 from updater import check_for_update, CURRENT_VERSION, apply_pending_update_and_maybe_restart
+from backend_worker import TrackerWorker
 
 APP_TITLE = f"PTFS Tracker v{CURRENT_VERSION}"
 
@@ -47,6 +43,14 @@ class MainWindow(QMainWindow):
 
         self._build_ui()
         self._log(f"PTFS Tracker version {CURRENT_VERSION}")
+        self.worker = None
+
+        # Try to show the configured callsign right away if backend config exists.
+        try:
+            from backend_worker import config as backend_config
+            self.callsign_label.setText(f"Callsign: {backend_config.CALLSIGN}")
+        except Exception:
+            pass
 
         # Check for updates shortly after launch, non-blocking to the UI feel.
         self._check_updates_on_startup()
@@ -91,7 +95,7 @@ class MainWindow(QMainWindow):
 
         bar.addSpacing(16)
 
-        freq_label = QLabel("STATUS:")
+        freq_label = QLabel("POSITION:")
         bar.addWidget(freq_label)
         self.freq_value = QLabel("---.---")
         self.freq_value.setObjectName("freqLabel")
@@ -148,8 +152,12 @@ class MainWindow(QMainWindow):
             self.connect_btn.setProperty("connected", "true")
             self.status_label.setText("Connected")
             self.status_label.setProperty("state", "connected")
-            self._log("Connected. (Backend tracking not wired in yet.)")
-            # TODO: start tracker.py's capture loop here once backend is ready
+
+            self.worker = TrackerWorker()
+            self.worker.log.connect(self._log)
+            self.worker.position.connect(self._on_position_update)
+            self.worker.error.connect(self._on_worker_error)
+            self.worker.start()
         else:
             self._do_disconnect()
         self._refresh_style()
@@ -166,52 +174,19 @@ class MainWindow(QMainWindow):
         self.connect_btn.setProperty("connected", "false")
         self.status_label.setText("Not connected")
         self.status_label.setProperty("state", "idle")
+
+        if self.worker is not None:
+            self.worker.stop()
+            self.worker.wait(3000)  # wait up to 3s for the thread to exit cleanly
+            self.worker = None
+
         self._log("Disconnected.")
-        # TODO: stop tracker.py's capture loop here once backend is ready
 
-    def _refresh_style(self):
-        # Force Qt to re-evaluate the [connected="true"] / [state=...] style rules
-        for widget in (self.connect_btn, self.status_label):
-            widget.style().unpolish(widget)
-            widget.style().polish(widget)
+    def _on_position_update(self, gx: float, gy: float):
+        self.freq_value.setText(f"{gx:.0f}, {gy:.0f}")
+        self._log(f"Position: ({gx:.1f}, {gy:.1f})")
 
-    def _check_updates_on_startup(self):
-        try:
-            info = check_for_update()
-        except Exception as e:
-            self._log(f"Update check failed: {e}")
-            return
-
-        if info is None:
-            self._log("You're on the latest version.")
-            return
-
-        self._log(f"Update available: v{info['version']} "
-                   f"(you have v{CURRENT_VERSION}). Downloading...")
-        try:
-            from updater import apply_update
-            apply_update(info)
-            self._log("Update downloaded. Restart the app to apply it.")
-        except Exception as e:
-            self._log(f"Update download failed: {e}")
-
-
-def main():
-    # Must run before the GUI is built: if an update was downloaded on a
-    # previous run, this swaps it in and relaunches, exiting this process.
-    apply_pending_update_and_maybe_restart()
-
-    app = QApplication(sys.argv)
-
-    style_path = os.path.join(os.path.dirname(__file__), "style.qss")
-    if os.path.exists(style_path):
-        with open(style_path) as f:
-            app.setStyleSheet(f.read())
-
-    window = MainWindow()
-    window.show()
-    sys.exit(app.exec())
-
-
-if __name__ == "__main__":
-    main()
+    def _on_worker_error(self, message: str):
+        self._log(f"ERROR: {message}")
+        # Roll the UI back to disconnected state since the worker bailed out.
+        self.connect_btn.setChecked(False)

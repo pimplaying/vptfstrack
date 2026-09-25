@@ -23,8 +23,7 @@ OutputBaseFilename=PTFSTracker_Setup
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
-; Uncomment and point at an icon once you have one:
-; SetupIconFile=icon.ico
+SetupIconFile=icon.ico
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
