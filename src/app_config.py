@@ -27,7 +27,11 @@ DEFAULT_SETTINGS = {
 }
 
 if getattr(sys, "frozen", False):
-    CONFIG_DIR = Path(os.environ.get("APPDATA", Path.home())) / "PTFS Tracker"
+    config_home = os.environ.get("PTFS_TRACKER_HOME")
+    if config_home:
+        CONFIG_DIR = Path(config_home).expanduser()
+    else:
+        CONFIG_DIR = Path(os.environ.get("APPDATA", Path.home())) / "PTFS Tracker"
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     SETTINGS_PATH = CONFIG_DIR / "settings.json"
     REFERENCE_MAP_PATH = CONFIG_DIR / "reference_map.png"
